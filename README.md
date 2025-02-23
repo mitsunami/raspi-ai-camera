@@ -22,7 +22,7 @@ This project uses a **Raspberry Pi Zero 2 W** and an **AI camera module** to rec
 | Raspberry Pi AI Camera | AI-powered image recognition |
 | Host Machine | Machine to connect to raspi and for model training |
 
-### 2️⃣ **Setup Raspberry Pi with Camera **
+### 2️⃣ **Setup Raspberry Pi with Camera**
 
 ### 3️⃣ **Collect Data for Model Training**
 

@@ -7,6 +7,7 @@ import json
 import logging
 import socketserver
 import cv2
+import libcamera
 from http import server
 from threading import Condition, Thread
 from picamera2 import Picamera2
@@ -77,19 +78,20 @@ PAGE = """\
 
     <h2>Camera Settings</h2>
     <label>Analogue Gain:</label>
-    <input type="range" min="1" max="16" step="0.1" value="1.0" oninput="adjustSetting('gain', this.value)">
+    <input type="range" min="1" max="16" step="0.1" value="6.0" oninput="adjustSetting('gain', this.value)">
     <br>
     <label>Brightness:</label>
-    <input type="range" min="0.0" max="1.0" step="0.1" value="0.5" oninput="adjustSetting('brightness', this.value)">
+    <input type="range" min="-1.0" max="1.0" step="0.1" value="0.0" oninput="adjustSetting('brightness', this.value)">
     <br>
     <label>Contrast:</label>
-    <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" oninput="adjustSetting('contrast', this.value)">
+    <input type="range" min="0.0" max="32.0" step="0.1" value="1.0" oninput="adjustSetting('contrast', this.value)">
     <br>
     <label>White Balance:</label>
     <select onchange="adjustSetting('awb_mode', this.value)">
         <option value="auto">Auto</option>
         <option value="tungsten">Tungsten</option>
         <option value="fluorescent">Fluorescent</option>
+        <option value="indoor">Indoor</option>
         <option value="daylight">Daylight</option>
         <option value="cloudy">Cloudy</option>
     </select>
@@ -201,7 +203,19 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                 elif setting in ["brightness", "contrast", "saturation", "sharpness"]:
                     picam2.set_controls({setting.capitalize(): float(value)})
                 elif setting == "awb_mode":
-                    picam2.set_controls({"AwbMode": value})
+                    if value == "auto":
+                        mode = libcamera.controls.AwbModeEnum.Auto
+                    elif value == "tungsten":
+                        mode = libcamera.controls.AwbModeEnum.Tungsten
+                    elif value == "fluorescent":
+                        mode = libcamera.controls.AwbModeEnum.Fluorescent
+                    elif value == "indoor":
+                        mode = libcamera.controls.AwbModeEnum.Indoor
+                    elif value == "daylight":
+                        mode = libcamera.controls.AwbModeEnum.Daylight
+                    elif value == "cloudy":
+                        mode = libcamera.controls.AwbModeEnum.Cloudy
+                    picam2.set_controls({"AwbMode": mode})
                 else:
                     logging.warning(f"Unknown setting: {setting}")
             
@@ -233,13 +247,6 @@ def get_label_counts():
 # Initialize Camera
 picam2 = Picamera2()
 picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
-picam2.set_controls({
-    "AnalogueGain": 1.0,
-    "Brightness": 0.1,
-    "Contrast": 1.0,
-    #"AwbMode": "daylight",
-    #"AeExposureMode": "short",
-})
 output = StreamingOutput()
 picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 

@@ -86,6 +86,13 @@ PAGE = """\
     <label>Contrast:</label>
     <input type="range" min="0.0" max="32.0" step="0.1" value="1.0" oninput="adjustSetting('contrast', this.value)">
     <br>
+    <label>Exposure:</label>
+    <select onchange="adjustSetting('ae_mode', this.value)">
+        <option value="normal">Normal</option>
+        <option value="short">Short</option>
+        <option value="long">Long</option>
+    </select>
+    <br>
     <label>White Balance:</label>
     <select onchange="adjustSetting('awb_mode', this.value)">
         <option value="auto">Auto</option>
@@ -202,6 +209,14 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                     picam2.set_controls({"AnalogueGain": float(value)})
                 elif setting in ["brightness", "contrast", "saturation", "sharpness"]:
                     picam2.set_controls({setting.capitalize(): float(value)})
+                elif setting == "ae_mode":
+                    if value == "normal":
+                        mode = libcamera.controls.AeExposureModeEnum.Normal
+                    elif value == "short":
+                        mode = libcamera.controls.AeExposureModeEnum.Short
+                    elif value == "long":
+                        mode = libcamera.controls.AeExposureModeEnum.Long
+                    picam2.set_controls({"AeExposureMode": mode})
                 elif setting == "awb_mode":
                     if value == "auto":
                         mode = libcamera.controls.AwbModeEnum.Auto
@@ -247,6 +262,7 @@ def get_label_counts():
 # Initialize Camera
 picam2 = Picamera2()
 picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+picam2.set_controls({"AeEnable": 1})
 output = StreamingOutput()
 picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 

@@ -53,7 +53,7 @@ PAGE = """\
     setInterval(updateCounts, 5000);  // Refresh counts every 5 seconds
 
     function adjustSetting(setting, value) {
-        fetch(`/set_setting?setting=${{setting}}&value=${{value}}`);
+        fetch(`/set_setting?setting=${setting}&value=${value}`);
     }
 
     document.addEventListener("keydown", function(event) {
@@ -158,9 +158,6 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
         try:
             label = self.path.split('label=')[-1]
             if label not in labels:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b'Invalid label')
                 return
             
             label_dir = os.path.join(dataset_dir, label)

@@ -6,7 +6,6 @@ import time
 import json
 import logging
 import socketserver
-import cv2
 import libcamera
 from http import server
 from threading import Condition, Thread
@@ -179,9 +178,9 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             timestamp = int(time.time())
             filename = os.path.join(label_dir, f"{label}_{timestamp}.jpg")
 
-            frame = picam2.capture_array()
-            resized_frame = cv2.resize(frame, (640, 480))
-            cv2.imwrite(filename, resized_frame)
+            request = picam2.capture_request()
+            request.save("main", filename)
+            request.release()
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

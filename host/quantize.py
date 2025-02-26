@@ -5,6 +5,7 @@ import tensorflow_datasets as tfds
 import numpy as np
 from typing import Generator
 import pathlib
+import cv2
 
 DATASET = 'panda_school'
 
@@ -15,7 +16,7 @@ IMAGE_SHAPE = (224, 224)
 dataset_dir = pathlib.Path("./" + DATASET)
 dataset = tf.keras.utils.image_dataset_from_directory(
     dataset_dir,
-    image_size=(640, 480),  # Match your capture size
+    image_size=(480, 640),  # Match your capture size
     batch_size=BATCH_SIZE,  # Adjust batch size as needed
     shuffle=True,  # Shuffle to ensure good train/valid split
     seed=123  # Ensures reproducibility
@@ -125,14 +126,14 @@ test_ds = valid_ds
 
 # Preprocess the input image for inference
 def preprocess_image_visualization(image):
-    image = tf.image.resize(image, (224, 224))
-    image = tf.keras.applications.mobilenet_v2.preprocess_input(image)
-    return image
+    resized = tf.image.resize(image, (224, 224))
+    preprocessed = tf.keras.applications.mobilenet_v2.preprocess_input(resized)
+    return preprocessed
 
 # Perform detection on the input image
-def detect_objects(model, image):
-    image = np.expand_dims(image, axis=0)
-    predictions = model.predict(image)
+def detect_objects(model, tensor):
+    tensor = np.expand_dims(tensor, axis=0)
+    predictions = model.predict(tensor)
     return predictions
 
 # Get the class label and confidence score of the detected objects
@@ -144,20 +145,16 @@ def get_top_prediction(predictions):
 
 # Visualize the detections
 def visualize_detection(image, cls, score):
-    plt.imshow(image)
-    plt.text(10, 20, f'{cls}: {score}', color='red')
-    plt.axis('off')
-    #plt.show()
-    plt.savefig(f'detections_{cls}_{score}.png')
-    plt.cla()
+    image_np = image.numpy().astype(np.uint8)
+    image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+    cv2.putText(image_np, f'{cls}: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2, cv2.LINE_AA)
+    cv2.imwrite(f'quant_detections_{cls}_{score}.png', image_np)
 
 
 # Visualize detection results for some images
-#for sample in test_ds[0].take(4):
-#    image = preprocess_image_visualization(sample['image'])
 for image, label in test_ds.unbatch().take(4):
-    image = preprocess_image_visualization(image)
-    predictions = detect_objects(quantized_model, image)
+    preprocessed = preprocess_image_visualization(image)
+    predictions = detect_objects(quantized_model, preprocessed)
     cls, score = get_top_prediction(predictions)
     print(f'cls: {cls}, score: {score}')
     assert score > 0.55

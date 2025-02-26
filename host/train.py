@@ -1,6 +1,8 @@
 import os
 import tensorflow as tf
 import pathlib
+import numpy as np
+import cv2
 
 MODELS_DIR = 'models/'
 if not os.path.exists(MODELS_DIR):
@@ -18,7 +20,7 @@ IMAGE_SHAPE = (224, 224)
 dataset_dir = pathlib.Path("./" + DATASET)
 dataset = tf.keras.utils.image_dataset_from_directory(
     dataset_dir,
-    image_size=(640, 480),  # Match your capture size
+    image_size=(480, 640),  # Match your capture size
     batch_size=BATCH_SIZE,  # Adjust batch size as needed
     shuffle=True,  # Shuffle to ensure good train/valid split
     seed=123  # Ensures reproducibility
@@ -119,3 +121,53 @@ history = float_model.fit(
 
 float_model.save(MODEL)
 
+
+## Visualize detections
+
+import matplotlib.pyplot as plt
+# Load the test part of the dataset
+dataset = tf.keras.utils.image_dataset_from_directory(
+    dataset_dir,
+    image_size=(480, 640),  # Match your capture size
+    batch_size=BATCH_SIZE,  # Adjust batch size as needed
+    shuffle=True,  # Shuffle to ensure good train/valid split
+    seed=123  # Ensures reproducibility
+)
+valid_ds = dataset.skip(train_size)
+test_ds = valid_ds
+
+# Preprocess the input image for inference
+def preprocess_image_visualization(image):
+    resized = tf.image.resize(image, (224, 224))
+    preprocessed = tf.keras.applications.mobilenet_v2.preprocess_input(resized)
+    return preprocessed
+
+# Perform detection on the input image
+def detect_objects(model, tensor):
+    tensor = np.expand_dims(tensor, axis=0)
+    predictions = model.predict(tensor)
+    return predictions
+
+# Get the class label and confidence score of the detected objects
+def get_top_prediction(predictions):
+    top_idx = np.argsort(predictions)[0][-1]
+    top_score = predictions[0][top_idx]
+    top_class = class_names[top_idx]
+    return top_class, top_score
+
+# Visualize the detections
+def visualize_detection(image, cls, score):
+    image_np = image.numpy().astype(np.uint8)
+    image_np = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+    cv2.putText(image_np, f'{cls}: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2, cv2.LINE_AA)
+    cv2.imwrite(f'float_detections_{cls}_{score}.png', image_np)
+
+
+# Visualize detection results for some images
+for image, label in test_ds.unbatch().take(4):
+    preprocessed = preprocess_image_visualization(image)
+    predictions = detect_objects(float_model, preprocessed)
+    cls, score = get_top_prediction(predictions)
+    print(f'cls: {cls}, score: {score}')
+    assert score > 0.55
+    visualize_detection(image, cls, score)

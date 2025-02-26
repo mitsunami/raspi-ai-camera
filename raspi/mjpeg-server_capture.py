@@ -6,7 +6,6 @@ import time
 import json
 import logging
 import socketserver
-import cv2
 import libcamera
 from http import server
 from threading import Condition, Thread
@@ -93,6 +92,9 @@ PAGE = """\
         <option value="long">Long</option>
     </select>
     <br>
+    <label>Exposure Value:</label>
+    <input type="range" min="-8.0" max="8.0" step="0.33" value="0.0" oninput="adjustSetting('exposure', this.value)">
+    <br>
     <label>White Balance:</label>
     <select onchange="adjustSetting('awb_mode', this.value)">
         <option value="auto">Auto</option>
@@ -176,9 +178,9 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             timestamp = int(time.time())
             filename = os.path.join(label_dir, f"{label}_{timestamp}.jpg")
 
-            frame = picam2.capture_array()
-            resized_frame = cv2.resize(frame, (640, 480))
-            cv2.imwrite(filename, resized_frame)
+            request = picam2.capture_request()
+            request.save("main", filename)
+            request.release()
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -207,6 +209,8 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             if setting and value:
                 if setting in ["gain"]:
                     picam2.set_controls({"AnalogueGain": float(value)})
+                elif setting in ["exposure"]:
+                    picam2.set_controls({"ExposureValue": float(value)})
                 elif setting in ["brightness", "contrast", "saturation", "sharpness"]:
                     picam2.set_controls({setting.capitalize(): float(value)})
                 elif setting == "ae_mode":
@@ -261,7 +265,8 @@ def get_label_counts():
 
 # Initialize Camera
 picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+#picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+picam2.configure(picam2.create_preview_configuration(main={"size": (640, 480)}))
 picam2.set_controls({"AeEnable": 1})
 output = StreamingOutput()
 picam2.start_recording(MJPEGEncoder(), FileOutput(output))

@@ -1,0 +1,121 @@
+import os
+import tensorflow as tf
+import pathlib
+
+MODELS_DIR = 'models/'
+if not os.path.exists(MODELS_DIR):
+    os.mkdir(MODELS_DIR)
+
+DATASET = 'panda_school'
+MODEL = MODELS_DIR + 'mobilenet-' + DATASET
+MODEL_KERAS = MODELS_DIR + 'mobilenet-quant-' + DATASET + '.keras'
+
+BATCH_SIZE = 32
+IMAGE_SHAPE = (224, 224)
+
+
+# Load the dataset
+dataset_dir = pathlib.Path("./" + DATASET)
+dataset = tf.keras.utils.image_dataset_from_directory(
+    dataset_dir,
+    image_size=(640, 480),  # Match your capture size
+    batch_size=BATCH_SIZE,  # Adjust batch size as needed
+    shuffle=True,  # Shuffle to ensure good train/valid split
+    seed=123  # Ensures reproducibility
+)
+
+class_names = dataset.class_names
+num_classes = len(dataset.class_names)
+print("class_names (", num_classes, "):\n", class_names)
+
+# Get dataset size
+dataset_size = len(dataset)
+train_size = int(0.8 * dataset_size)  # 80% for training
+valid_size = dataset_size - train_size  # 20% for testing
+
+# Split dataset manually
+train_ds = dataset.take(train_size)
+valid_ds = dataset.skip(train_size)
+
+# Print dataset information
+print(f"Total samples: {dataset_size}")
+print(f"Train samples: {train_size}, Valid samples: {valid_size}")
+
+
+## Pre-processing and augmentation
+def preprocess_data(image, label):
+    # Set range
+    image = tf.keras.applications.mobilenet_v2.preprocess_input(tf.cast(image, tf.float32))
+    # Resize image
+    image = tf.image.resize(image, IMAGE_SHAPE)
+    return image, label
+
+train_ds = train_ds.map(preprocess_data)
+valid_ds = valid_ds.map(preprocess_data)
+
+# Add augmentation
+data_augmentation = tf.keras.Sequential([
+    tf.keras.layers.RandomFlip("horizontal"),  # Randomly flip images
+    tf.keras.layers.RandomRotation(0.2),  # Rotate images by 20% max
+    #tf.keras.layers.RandomZoom(0.1),  # Randomly zoom in by 20%
+    #tf.keras.layers.RandomTranslation(height_factor=0.05, width_factor=0.05),  # Move image
+    #tf.keras.layers.RandomBrightness(0.1),  # Adjust brightness
+    #tf.keras.layers.RandomContrast(0.1),  # Adjust contrast
+])
+
+train_ds = train_ds.map(lambda x, y: (data_augmentation(x), y))
+train_ds = train_ds.prefetch(tf.data.experimental.AUTOTUNE)
+valid_ds = valid_ds.prefetch(tf.data.experimental.AUTOTUNE)
+
+
+## Keras Mobilenetv2 model for transfer learning
+from keras.applications import MobileNetV2
+from keras.layers import Dense, GlobalAveragePooling2D
+from keras.models import Model
+
+base_model =  MobileNetV2(weights='imagenet', include_top=False, input_shape=IMAGE_SHAPE+(3,))
+
+# Add custom classification layers on top
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+predictions = Dense(num_classes, activation=tf.nn.softmax)(x)
+
+# Create the full model
+float_model = Model(inputs=base_model.input, outputs=predictions)
+
+# Freeze layers in the base model
+for layer in base_model.layers:
+    layer.trainable = False
+
+float_model.summary()
+
+
+## Train
+EPOCHS = 20
+
+float_model.compile(
+    optimizer=tf.keras.optimizers.Adam(),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+    metrics=['accuracy']
+)
+
+callback = tf.keras.callbacks.EarlyStopping(
+    monitor="val_accuracy",
+    baseline=0.8,
+    min_delta=0.01,
+    mode='max',
+    patience=5,
+    verbose=1,
+    restore_best_weights=True,
+    start_from_epoch=5,
+)
+
+history = float_model.fit(
+    train_ds,
+    validation_data=valid_ds,
+    epochs=EPOCHS,
+    callbacks=[callback]
+)
+
+float_model.save(MODEL)
+

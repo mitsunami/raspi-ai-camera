@@ -15,7 +15,6 @@ MODEL_KERAS = MODELS_DIR + 'mobilenet-quant-' + DATASET + '.keras'
 BATCH_SIZE = 32
 IMAGE_SHAPE = (224, 224)
 
-
 # Load the dataset
 dataset_dir = pathlib.Path("./" + DATASET)
 dataset = tf.keras.utils.image_dataset_from_directory(
@@ -32,16 +31,18 @@ print("class_names (", num_classes, "):\n", class_names)
 
 # Get dataset size
 dataset_size = len(dataset)
-train_size = int(0.8 * dataset_size)  # 80% for training
-valid_size = dataset_size - train_size  # 20% for testing
+train_size = int(0.7 * dataset_size)  # 70% for training
+valid_size = int(0.15 * dataset_size)    # 15% Validation
+test_size = dataset_size - train_size - valid_size  # Remaining 15% Test
 
 # Split dataset manually
 train_ds = dataset.take(train_size)
-valid_ds = dataset.skip(train_size)
+valid_ds = dataset.skip(train_size).take(valid_size)
+test_ds = dataset.skip(train_size + valid_size)
 
 # Print dataset information
 print(f"Total samples: {dataset_size}")
-print(f"Train samples: {train_size}, Valid samples: {valid_size}")
+print(f"Train samples: {train_size}, Validation samples: {valid_size}, Test samples: {test_size}")
 
 
 ## Pre-processing and augmentation
@@ -125,16 +126,6 @@ float_model.save(MODEL)
 ## Visualize detections
 
 import matplotlib.pyplot as plt
-# Load the test part of the dataset
-dataset = tf.keras.utils.image_dataset_from_directory(
-    dataset_dir,
-    image_size=(480, 640),  # Match your capture size
-    batch_size=BATCH_SIZE,  # Adjust batch size as needed
-    shuffle=True,  # Shuffle to ensure good train/valid split
-    seed=123  # Ensures reproducibility
-)
-valid_ds = dataset.skip(train_size)
-test_ds = valid_ds
 
 # Preprocess the input image for inference
 def preprocess_image_visualization(image):

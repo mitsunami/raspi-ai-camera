@@ -117,14 +117,14 @@ def parse_classification_results(request: CompletedRequest):
 def draw_classification_results(request: CompletedRequest, results, stream="main"):
     """Draw classification results on the video stream."""
     with MappedArray(request, stream) as m:
-        text_x, text_y = 10, 20  # Position for text
+        text_x, text_y = 10, 25  # Position for text
         for index, result in enumerate(results):
             label = get_label(request, idx=result.idx)
             #text = f"{label}: {result.score:.3f}"
             text = f"{label}"
             if result.score > 0.7:
                 cv2.putText(m.array, text, (text_x, text_y + index * 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             break
 
 def parse_and_draw_classification_results(request: CompletedRequest):

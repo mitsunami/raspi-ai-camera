@@ -34,6 +34,7 @@ Kintoki
 Kiko
 Lily1
 Lily2
+Lucy
 Love
 Luna
 Lary
@@ -76,4 +77,5 @@ Ying
 Zoe
 Bambi
 Max2
+Ruby
 Poppy

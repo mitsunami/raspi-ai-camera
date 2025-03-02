@@ -7,8 +7,9 @@ import json
 import logging
 import socketserver
 import libcamera
+import threading
+import cv2
 from http import server
-from threading import Condition, Thread
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
@@ -30,7 +31,12 @@ PAGE = """\
 <script>
     function captureImage() {
         let label = document.getElementById("label").value;
-        fetch("/capture?label=" + label)
+        let mode = document.getElementById("mode").value;
+        let numPhotos = document.getElementById("numPhotos").value;
+        let interval = document.getElementById("interval").value;
+        let sharpness = document.getElementById("sharpness").value;
+        let url = `/capture?label=${label}&mode=${mode}&numPhotos=${numPhotos}&interval=${interval}&sharpness=${sharpness}`;
+        fetch(url)
             .then(() => updateCounts())  // Update count immediately after capture
             .catch(error => console.error("Error capturing image:", error));
     }
@@ -72,8 +78,36 @@ PAGE = """\
     <select id="label">
         {options_placeholder}
     </select>
+    <br>
+    <br>
+
+    <div id="autoSettings">
+        <h3>Capture Settings</h3>
+        <label for="mode">Capture Mode:</label>
+        <select id="mode">
+            <option value="manual">Manual Capture</option>
+            <option value="auto">Automatic Capture</option>
+        </select>
+        <br>
+ 
+        <label for="numPhotos">Number of Photos:</label>
+        <input type="number" id="numPhotos" min="1" max="100" value="10">
+        <br>
+
+        <label for="interval">Interval (seconds):</label>
+        <input type="number" id="interval" min="0.1" max="10" step="0.1" value="0.5">
+        <br>
+
+        <label for="sharpness">Sharpness Threshold:</label>
+        <input type="number" id="sharpness" min="30" max="200" value="50">
+        <br>
+    </div>
+
     <button onclick="captureImage()">Capture</button>
-    <p>Shortcut Key: Press <b>'c'</b> to capture</p>
+    <p>Shortcut Key: Press <b>'c'</b> to start capturing!<br>
+        <b>Manual Capture:</b> Takes a single image instantly.<br>
+        <b>Automatic Capture:</b> Captures multiple images at regular intervals & filters out blurry ones. <br>
+    </p>
 
     <h2>Camera Settings</h2>
     <label>Analogue Gain:</label>
@@ -111,7 +145,7 @@ PAGE = """\
 class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
-        self.condition = Condition()
+        self.condition = threading.Condition()
 
     def write(self, buf):
         with self.condition:
@@ -120,6 +154,8 @@ class StreamingOutput(io.BufferedIOBase):
 
 class StreamingHandler(server.BaseHTTPRequestHandler):
     def do_GET(self):
+        global capture_mode, num_photos, capture_interval, sharpness_threshold
+
         if self.path == '/':
             self.send_response(301)
             self.send_header('Location', '/index.html')
@@ -165,30 +201,24 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def handle_capture(self):
-        """Handles image capture and saves it to the dataset."""
-        try:
-            label = self.path.split('label=')[-1]
-            if label not in labels:
-                return
-            
-            label_dir = os.path.join(dataset_dir, label)
-            if not os.path.exists(label_dir):
-                os.makedirs(label_dir)
+        """Handles manual or automatic image capture based on selected mode."""
+        global capture_active
+        params = dict(item.split('=') for item in self.path.split('?')[-1].split('&'))
 
-            timestamp = int(time.time())
-            filename = os.path.join(label_dir, f"{label}_{timestamp}.jpg")
+        label = params.get("label")
+        mode = params.get("mode")
+        num_photos = int(params.get("numPhotos", 10))
+        capture_interval = float(params.get("interval", 2))
+        sharpness_threshold = int(params.get("sharpness", 100))
 
-            request = picam2.capture_request()
-            request.save("main", filename)
-            request.release()
+        if mode == "manual":
+            capture_manual_photo(label)
+        elif mode == "auto":
+            capture_active = True
+            threading.Thread(target=auto_capture_photos, args=(label, num_photos, capture_interval, sharpness_threshold)).start()
 
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"message": "Image saved"}')
-
-        except Exception as e:
-            logging.error(f"Error capturing image: {str(e)}")
+        self.send_response(200)
+        self.end_headers()
 
     def handle_label_counts(self):
         """Returns the number of images in each label directory as JSON."""
@@ -262,6 +292,52 @@ def get_label_counts():
         else:
             label_counts[label] = 0
     return label_counts
+
+def is_sharp(image, threshold=100):
+    """Determines if an image is sharp using Laplacian variance."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    print(f"sharpness: {laplacian_var}, threshold: {threshold}")
+    return laplacian_var > threshold
+
+def capture_manual_photo(label):
+    """Captures a single image manually and saves it."""
+    label_dir = os.path.join(dataset_dir, label)
+    os.makedirs(label_dir, exist_ok=True)
+
+    frame = picam2.capture_array()
+    filename = os.path.join(label_dir, f"{label}_{int(time.time()*1000)}.jpg")
+    request = picam2.capture_request()
+    request.save("main", filename)
+    request.release()
+
+    #cv2.imwrite(filename, frame)
+    print(f"Manual Capture Saved: {filename}")
+
+def auto_capture_photos(label, num_photos, interval, sharpness_threshold=100):
+    """Automatically captures multiple images but only saves sharp ones."""
+    global capture_active
+    label_dir = os.path.join(dataset_dir, label)
+    os.makedirs(label_dir, exist_ok=True)
+
+    saved_images = 0
+    while saved_images < num_photos and capture_active:
+        frame = picam2.capture_array()
+        if is_sharp(frame, threshold=sharpness_threshold):
+            filename = os.path.join(label_dir, f"{label}_{int(time.time()*1000)}.jpg")
+            request = picam2.capture_request()
+            request.save("main", filename)
+            request.release()
+            #cv2.imwrite(filename, frame)
+            saved_images += 1
+            print(f"Saved: {filename} (Sharp Image)")
+        else:
+            print("Skipped a blurry image...")
+
+        time.sleep(interval)
+
+    capture_active = False
+
 
 # Initialize Camera
 picam2 = Picamera2()

@@ -12,7 +12,7 @@ DATASET = 'panda_school'
 MODEL = MODELS_DIR + 'mobilenet-' + DATASET
 MODEL_KERAS = MODELS_DIR + 'mobilenet-quant-' + DATASET + '.keras'
 
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 IMAGE_SHAPE = (224, 224)
 
 # Load the dataset
@@ -58,12 +58,12 @@ valid_ds = valid_ds.map(preprocess_data)
 
 # Add augmentation
 data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomFlip("horizontal"),  # Randomly flip images
-    tf.keras.layers.RandomRotation(0.2),  # Rotate images by 20% max
-    #tf.keras.layers.RandomZoom(0.1),  # Randomly zoom in by 20%
-    #tf.keras.layers.RandomTranslation(height_factor=0.05, width_factor=0.05),  # Move image
-    #tf.keras.layers.RandomBrightness(0.1),  # Adjust brightness
-    #tf.keras.layers.RandomContrast(0.1),  # Adjust contrast
+    tf.keras.layers.RandomFlip("horizontal_and_vertical"),  # Randomly flip images
+    tf.keras.layers.RandomRotation(0.1),  # Rotate images by 10% max
+    tf.keras.layers.RandomZoom(0.05),  # Randomly zoom in by 5%
+    tf.keras.layers.RandomTranslation(height_factor=0.05, width_factor=0.05),  # Move image
+    tf.keras.layers.RandomBrightness(0.1),  # Adjust brightness
+    tf.keras.layers.RandomContrast(0.1),  # Adjust contrast
 ])
 
 train_ds = train_ds.map(lambda x, y: (data_augmentation(x), y))
@@ -94,7 +94,7 @@ float_model.summary()
 
 
 ## Train
-EPOCHS = 20
+EPOCHS = 800
 
 float_model.compile(
     optimizer=tf.keras.optimizers.Adam(),
@@ -104,13 +104,13 @@ float_model.compile(
 
 callback = tf.keras.callbacks.EarlyStopping(
     monitor="val_accuracy",
-    baseline=0.8,
+    baseline=0.7,
     min_delta=0.01,
     mode='max',
-    patience=5,
+    patience=25,
     verbose=1,
     restore_best_weights=True,
-    start_from_epoch=5,
+    start_from_epoch=500,
 )
 
 history = float_model.fit(

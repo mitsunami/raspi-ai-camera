@@ -15,12 +15,12 @@ from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 
 # Load labels from labels.txt
-labels_file = "labels.txt"
+labels_file = "./assets/panda_school_labels.txt"
 with open(labels_file, 'r') as f:
     labels = [line.strip() for line in f.readlines()]
 
 # Create dataset directories
-dataset_dir = "./custom_dataset"
+dataset_dir = "./panda_school"
 os.makedirs(dataset_dir, exist_ok=True)
 
 # MJPEG Streaming Page (Updated with capture button & controls)
@@ -85,13 +85,13 @@ PAGE = """\
         <h3>Capture Settings</h3>
         <label for="mode">Capture Mode:</label>
         <select id="mode">
-            <option value="manual">Manual Capture</option>
             <option value="auto">Automatic Capture</option>
+            <option value="manual">Manual Capture</option>
         </select>
         <br>
  
         <label for="numPhotos">Number of Photos:</label>
-        <input type="number" id="numPhotos" min="1" max="100" value="10">
+        <input type="number" id="numPhotos" min="1" max="100" value="50">
         <br>
 
         <label for="interval">Interval (seconds):</label>
@@ -99,7 +99,7 @@ PAGE = """\
         <br>
 
         <label for="sharpness">Sharpness Threshold:</label>
-        <input type="number" id="sharpness" min="30" max="200" value="50">
+        <input type="number" id="sharpness" min="10" max="200" value="30">
         <br>
     </div>
 

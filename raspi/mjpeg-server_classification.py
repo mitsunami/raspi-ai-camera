@@ -276,6 +276,7 @@ if __name__ == "__main__":
         with open("assets/imagenet_labels.txt", "r") as f:
             intrinsics.labels = f.read().splitlines()
     intrinsics.update_with_defaults()
+    print(intrinsics)
 
     # Initialize Camera and Stream
     picam2 = Picamera2(imx500.camera_num)

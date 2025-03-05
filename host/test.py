@@ -66,8 +66,8 @@ for images, labels in test_ds:  # Iterate through batches
 conf_matrix = confusion_matrix(y_true, y_pred)
 
 # Plot Confusion Matrix
-plt.figure(figsize=(10, 8))
-sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues",
+plt.figure(figsize=(12, 11))
+sns.heatmap(conf_matrix, annot=False, fmt="d", cmap="Blues",
             xticklabels=class_names, yticklabels=class_names)
 plt.xlabel("Predicted Label")
 plt.ylabel("True Label")
